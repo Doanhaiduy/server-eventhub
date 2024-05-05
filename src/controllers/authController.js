@@ -20,7 +20,9 @@ const register = asyncHandler(async (req, res, next) => {
         email,
     });
     if (exitingUser) {
-        res.status(401);
+        res.status(401).json({
+            message: 'User already exists!',
+        });
         throw new Error('User already exists!');
     }
 
@@ -36,12 +38,46 @@ const register = asyncHandler(async (req, res, next) => {
     res.status(200).json({
         message: 'User created successfully!',
         data: {
-            ...newUser,
+            fullName: newUser.fullName,
+            email: newUser.email,
+            id: newUser.id,
             accessToken: await getJsonWebToken(email, newUser.id),
         },
     });
 });
 
+const login = asyncHandler(async (req, res, next) => {
+    const { email, password } = req.body;
+    const exitingUser = await UserModel.findOne({
+        email,
+    });
+
+    if (!exitingUser) {
+        res.status(403).json({
+            message: 'User not found!',
+        });
+        throw new Error('User not found!');
+    }
+
+    const isMatchPassword = await bcrypt.compare(password, exitingUser.password);
+    if (!isMatchPassword) {
+        res.status(401).json({
+            message: 'Email or password is incorrect!',
+        });
+        throw new Error('Email or password is incorrect!');
+    }
+
+    res.status(200).json({
+        message: 'Login successfully!',
+        data: {
+            id: exitingUser.id,
+            email: exitingUser.email,
+            fullName: exitingUser.fullName,
+            accessToken: await getJsonWebToken(email, exitingUser.id),
+        },
+    });
+});
 module.exports = {
     register,
+    login,
 };
