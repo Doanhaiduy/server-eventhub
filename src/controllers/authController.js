@@ -2,7 +2,19 @@ const UserModel = require('../models/userModel');
 const bcrypt = require('bcrypt');
 const asyncHandler = require('express-async-handler');
 const jwt = require('jsonwebtoken');
+const nodemailer = require('nodemailer');
+require('dotenv').config();
 
+const transporter = nodemailer.createTransport({
+    host: 'smtp.gmail.com',
+    port: 587,
+    // secure: true,
+    // service: 'gmail',
+    auth: {
+        user: process.env.EMAIL_USER,
+        pass: process.env.EMAIL_PASS,
+    },
+});
 const getJsonWebToken = async (email, id) => {
     const payload = {
         email,
@@ -13,6 +25,42 @@ const getJsonWebToken = async (email, id) => {
     });
     return token;
 };
+
+const handleSendMail = async (val, email) => {
+    try {
+        await transporter.sendMail({
+            from: `Support EventHub Application <${process.env.EMAIL_USER}>`,
+            to: email,
+            subject: 'Verification code for EventHub Application',
+            text: 'Your verification code is: ' + val + ' Please use this code to verify your account.',
+            html: '<h1>Your verification code is: ' + val + ' Please use this code to verify your account.</h1>',
+        });
+        return val;
+    } catch (error) {
+        return error;
+    }
+};
+
+const verification = asyncHandler(async (req, res, next) => {
+    const { email } = req.body;
+    const verificationCode = Math.round(Math.random() * 9000)
+        .toString()
+        .padStart(4, '0');
+
+    try {
+        const code = await handleSendMail(verificationCode, email);
+        res.status(200).json({
+            message: 'Verification code has been sent to your email!',
+            data: {
+                email,
+                code,
+            },
+        });
+    } catch (error) {
+        res.status(401);
+        throw new Error('Error while sending email');
+    }
+});
 
 const register = asyncHandler(async (req, res, next) => {
     const { fullName, email, password } = req.body;
@@ -80,4 +128,5 @@ const login = asyncHandler(async (req, res, next) => {
 module.exports = {
     register,
     login,
+    verification,
 };

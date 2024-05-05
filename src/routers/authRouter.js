@@ -1,5 +1,5 @@
 const express = require('express');
-const { register, login } = require('../controllers/authController');
+const { register, login, verification } = require('../controllers/authController');
 const authRouter = express.Router();
 
 authRouter.get('/hello', (req, res) => {
@@ -8,5 +8,6 @@ authRouter.get('/hello', (req, res) => {
 
 authRouter.post('/register', register);
 authRouter.post('/login', login);
+authRouter.post('/verification', verification);
 
 module.exports = authRouter;
