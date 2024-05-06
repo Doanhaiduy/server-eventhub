@@ -3,6 +3,7 @@ const bcrypt = require('bcrypt');
 const asyncHandler = require('express-async-handler');
 const jwt = require('jsonwebtoken');
 const nodemailer = require('nodemailer');
+const { hashedPassword } = require('../helpers');
 require('dotenv').config();
 
 const transporter = nodemailer.createTransport({
@@ -26,16 +27,10 @@ const getJsonWebToken = async (email, id) => {
     return token;
 };
 
-const handleSendMail = async (val, email) => {
+const handleSendMail = async (val) => {
     try {
-        await transporter.sendMail({
-            from: `Support EventHub Application <${process.env.EMAIL_USER}>`,
-            to: email,
-            subject: 'Verification code for EventHub Application',
-            text: 'Your verification code is: ' + val + ' Please use this code to verify your account.',
-            html: '<h1>Your verification code is: ' + val + ' Please use this code to verify your account.</h1>',
-        });
-        return val;
+        await transporter.sendMail(val);
+        return 'OK';
     } catch (error) {
         return error;
     }
@@ -48,12 +43,23 @@ const verification = asyncHandler(async (req, res, next) => {
         .padStart(4, '0');
 
     try {
-        const code = await handleSendMail(verificationCode, email);
+        const data = {
+            from: `Support EventHub Application <${process.env.EMAIL_USER}>`,
+            to: email,
+            subject: 'Verification code for EventHub Application',
+            text: 'Your verification code is: ' + verificationCode + ' Please use this code to verify your account.',
+            html:
+                '<h1>Your verification code is: ' +
+                verificationCode +
+                ' Please use this code to verify your account.</h1>',
+        };
+        const res = await handleSendMail(data);
+
         res.status(200).json({
             message: 'Verification code has been sent to your email!',
             data: {
                 email,
-                code,
+                code: verificationCode,
             },
         });
     } catch (error) {
@@ -74,12 +80,11 @@ const register = asyncHandler(async (req, res, next) => {
         throw new Error('User already exists!');
     }
 
-    const salt = await bcrypt.genSalt(10);
-    const hashedPassword = await bcrypt.hash(password, salt);
+    const newHashedPassword = await hashedPassword(password);
     const newUser = new UserModel({
         fullName: fullName ?? '',
         email,
-        password: hashedPassword,
+        password: newHashedPassword,
     });
     await newUser.save();
 
@@ -125,8 +130,65 @@ const login = asyncHandler(async (req, res, next) => {
         },
     });
 });
+
+const forgotPassword = asyncHandler(async (req, res, next) => {
+    const { email } = req.body;
+
+    const verificationCode = Math.round(Math.random() * 999000)
+        .toString()
+        .padStart(6, '0');
+
+    const data = {
+        from: `Support EventHub Application <${process.env.EMAIL_USER}>`,
+        to: email,
+        subject: 'Reset Password for EventHub Application',
+        text: 'Your verification code is: ' + verificationCode + '. Please use this code to verify your account.',
+        html:
+            '<h1>Your verification code is: ' +
+            verificationCode +
+            '. Please use this code to verify your account.</h1>',
+    };
+
+    const userExiting = await UserModel.findOne({
+        email,
+    });
+
+    if (!userExiting) {
+        res.status(401).json({
+            message: 'User not found!',
+        });
+        throw new Error('User not found!');
+    } else {
+        const newHashedPassword = await hashedPassword(verificationCode);
+        await UserModel.findByIdAndUpdate(userExiting._id, {
+            password: newHashedPassword,
+            isChangePassword: true,
+        }).catch((error) => {
+            console.log(error.message);
+            res.status(401);
+            throw new Error('Error while updating password');
+        });
+
+        await handleSendMail(data)
+            .then(() => {
+                res.status(200).json({
+                    message: 'Verification code has been sent to your email!',
+                    // data: {
+                    //     email,
+                    //     code: verificationCode,
+                    // },
+                    data: [],
+                });
+            })
+            .catch((error) => {
+                res.status(401);
+                throw new Error('Error while sending email');
+            });
+    }
+});
 module.exports = {
     register,
     login,
     verification,
+    forgotPassword,
 };

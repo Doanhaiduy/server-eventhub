@@ -14,6 +14,10 @@ const userSchema = new mongoose.Schema({
     photoURL: {
         type: String,
     },
+    isChangePassword: {
+        type: Boolean,
+        default: false,
+    },
     createAt: {
         type: Date,
         default: Date.now,
